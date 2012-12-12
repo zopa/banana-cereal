@@ -10,10 +10,9 @@ import Control.Concurrent
 import Control.Concurrent.STM
 import Control.Monad
 
-serialize :: ToJSON a => WS.Sink ByteString -> Event t a -> Moment t ()
-serialize sink ev = reactimate $ sendSink sink . transform <$> ev
-  where
-    transform = fromLazyByteString . encode
+serialize :: (TextProtocol p, ToJSON a, Frameworks t)
+          => WS.Sink p -> Event t a -> Moment t ()
+serialize sink ev = reactimate $ sendSink sink . textData . encode <$> ev
 
 tChanAddHandler :: TChan a -> IO (AddHandler a)
 tChanAddHandler chan = do
@@ -29,22 +28,20 @@ chanAddHandler chan = do
 
 
 readFromChan :: (FromJSON a, Frameworks t)
-             => Chan a 
-             -> Moment t (Event t ParseError, Event t a)
+             => Chan ByteString 
+             -> Moment t (Event t String, Event t a)
 readFromChan chan = do
-    ev <- chanAddHandler chan >>= fromAddHandler
-    return . split $ eitherFromJSON <$> ev
+    ev <- liftIO (chanAddHandler chan) >>= fromAddHandler
+    return . split $ eitherDecode <$> ev
 
-readFromTChan :: FromJSON a => Chan a 
-              -> Moment t ( Event t ParseError, Event t a)
+readFromTChan :: (FromJSON a, Frameworks t)
+              => TChan ByteString 
+              -> Moment t ( Event t String, Event t a)
 readFromTChan chan = do
-    ev <- tChanAddHandler chan >>= fromAddHandler
-    return . split $ eitherFromJSON <$> ev
+    ev <- liftIO (tChanAddHandler chan) >>= fromAddHandler
+    return . split $ eitherDecode <$> ev
 
-eitherFromJSON :: FromJSON a => Either ParseError a
-eitherFromJSON j = 
-  case (fromJSON j) of
-    Error msg -> Left msg
-    Success v -> Right v
-
-type ParseError = String
+-- eitherDecode will bein the next version of Aeson, whenever that's 
+-- released.
+eitherDecode :: FromJSON a => ByteString -> Either String a
+eitherDecode = undefined
