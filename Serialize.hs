@@ -26,22 +26,20 @@ chanAddHandler chan = do
     forkIO $ forever $ (readChan chan) >>= runHandler
     return addHandler
 
-
+-- | Read an Event stream from a channel. If a ByteString read from the Chan
+-- cannot be cleanly converted into JSON, it will be suppressed.
 readFromChan :: (FromJSON a, Frameworks t)
              => Chan ByteString 
-             -> Moment t (Event t String, Event t a)
+             -> Moment t (Event t a)
 readFromChan chan = do
     ev <- liftIO (chanAddHandler chan) >>= fromAddHandler
-    return . split $ eitherDecode <$> ev
+    return . filterJust $ decode <$> ev
 
+-- | Read an Event stream from a TChan. If a ByteString read from the Chan
+-- cannot be cleanly converted into JSON, it will be suppressed.
 readFromTChan :: (FromJSON a, Frameworks t)
               => TChan ByteString 
-              -> Moment t ( Event t String, Event t a)
+              -> Moment t (Event t a)
 readFromTChan chan = do
     ev <- liftIO (tChanAddHandler chan) >>= fromAddHandler
-    return . split $ eitherDecode <$> ev
-
--- eitherDecode will bein the next version of Aeson, whenever that's 
--- released.
-eitherDecode :: FromJSON a => ByteString -> Either String a
-eitherDecode = undefined
+    return . filterJust $ decode <$> ev
